@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import api from "../services/api";
 import { useNavigate, Link } from "react-router-dom";
 import Toast from "../components/Toast";
@@ -9,6 +9,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      // Already logged in → go to chat
+      navigate("/rooms", { replace: true });
+    }
+  }, [navigate]);
 
   function showToast(type, message) {
     setToast({ type, message });
@@ -22,10 +30,20 @@ export default function Login() {
       const res = await api.post("/api/auth/login", { email, password });
 
       if (res.data?.success) {
-        localStorage.setItem("token", res.data.token);
-        localStorage.setItem("user", JSON.stringify(res.data.user));
+        const { token, user } = res.data;
+
+        // ✅ Save user and token
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
+
+        // ✅ Set axios header so further requests are authorized
+        api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+        // ✅ Show success toast
         showToast("success", "Login successful!");
-        setTimeout(() => navigate("/rooms"), 1000);
+
+        // ✅ Navigate to /rooms after short delay to show toast
+        setTimeout(() => navigate("/rooms", { replace: true }), 800);
       } else {
         showToast("error", res.data?.message || "Invalid credentials");
       }

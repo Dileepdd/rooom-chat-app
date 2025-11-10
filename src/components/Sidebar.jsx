@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Avatar from "./Avatar";
 import { formatRelativeTime } from "../utils/timeUtils";
+import api from "../services/api";
 
 export default function Sidebar({
   rooms,
@@ -38,13 +39,14 @@ export default function Sidebar({
   function handleLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    delete api.defaults.headers.common["Authorization"];
     window.location.href = "/login";
   }
 
   return (
     <aside className="flex flex-col bg-white border-r border-gray-200 h-full w-full sm:w-80 overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
+      <div className="flex items-center justify-between h-14 px-4 border-b bg-white flex-shrink-0">
         <div className="flex items-center gap-2">
           {user && <Avatar user={user} size={36} />}
           <div>

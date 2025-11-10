@@ -8,6 +8,7 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [message, setMessage] = useState("");
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -47,9 +48,11 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
 
   async function handleSend(e) {
     e?.preventDefault();
-    const input = inputRef.current;
-    const content = input?.value.trim();
+    const content = message.trim();
     if (!content) return;
+
+    setMessage(""); // clear input immediately
+    setSending(true);
 
     const tempMsg = {
       _id: Date.now().toString(),
@@ -59,7 +62,6 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
       pending: true,
     };
 
-    // Optimistically add the message
     setMessages((prev) => [...prev, tempMsg]);
     scrollToBottom(false);
 
@@ -69,9 +71,7 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
         content,
       });
       const newMsg = res.data;
-      input.value = "";
 
-      // Replace temporary message
       setMessages((prev) =>
         prev.map((m) => (m._id === tempMsg._id ? newMsg : m))
       );
@@ -82,7 +82,7 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
     } finally {
       setSending(false);
       scrollToBottom();
-      requestAnimationFrame(() => input.focus());
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
@@ -140,6 +140,7 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
             onClick={onBack}
             className="mr-2 p-1 rounded-md text-gray-600 hover:bg-gray-100 sm:hidden"
             aria-label="Back"
+            disabled={sending || !message.trim()}
           >
             <ArrowLeft size={22} />
           </button>
@@ -193,11 +194,13 @@ export default function ChatPane({ room, onRoomUpdated, onBack }) {
 
       {/* 🔹 Sticky Footer */}
       <div className="sticky bottom-0 bg-white border-t z-40 p-2 sm:p-3 flex-shrink-0">
-        <div className="max-w-5xl mx-auto flex items-center gap-2 px-2 sm:px-3">
+        <div className=" mx-auto flex items-center gap-2 px-2 sm:px-3">
           <input
             ref={inputRef}
             type="text"
+            value={message}
             placeholder="Type a message..."
+            onChange={(e) => setMessage(e.target.value)}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             onKeyDown={(e) => e.key === "Enter" && !sending && handleSend(e)}
