@@ -1,27 +1,35 @@
 import React, { useEffect, useState, useRef } from "react";
 import api from "../services/api";
-import { Check, CheckCheck } from "lucide-react";
+import { Check, CheckCheck, ArrowLeft, Send } from "lucide-react";
 import Avatar from "./Avatar";
 
-export default function ChatPane({ room, onRoomUpdated }) {
+export default function ChatPane({ room, onRoomUpdated, onBack }) {
   const [messages, setMessages] = useState([]);
-  const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
-  // auto-scroll when new messages appear
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Scroll to bottom smoothly
+  const scrollToBottom = (smooth = true) => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: smooth ? "smooth" : "auto",
+      block: "end",
+    });
   };
 
+  // Load messages on room change
   useEffect(() => {
     if (room?._id) fetchMessages(room._id);
   }, [room?._id]);
 
+  // Auto scroll when new messages appear
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottom(false);
   }, [messages]);
 
   async function fetchMessages(roomId) {
@@ -33,15 +41,27 @@ export default function ChatPane({ room, onRoomUpdated }) {
       console.error("Failed to load messages:", err);
     } finally {
       setLoading(false);
+      setTimeout(() => scrollToBottom(false), 100);
     }
   }
 
-  async function handleSend() {
-    if (!messageText.trim()) return;
+  async function handleSend(e) {
+    e?.preventDefault();
+    const input = inputRef.current;
+    const content = input?.value.trim();
+    if (!content) return;
 
-    const content = messageText.trim();
-    setMessageText("");
-    setSending(true);
+    const tempMsg = {
+      _id: Date.now().toString(),
+      content,
+      senderId: user._id,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+
+    // Optimistically add the message
+    setMessages((prev) => [...prev, tempMsg]);
+    scrollToBottom(false);
 
     try {
       const res = await api.post("/api/message", {
@@ -49,31 +69,24 @@ export default function ChatPane({ room, onRoomUpdated }) {
         content,
       });
       const newMsg = res.data;
+      input.value = "";
 
-      // ✅ Update local chat immediately
-      setMessages((prev) => [...prev, newMsg]);
+      // Replace temporary message
+      setMessages((prev) =>
+        prev.map((m) => (m._id === tempMsg._id ? newMsg : m))
+      );
 
       onRoomUpdated?.("refresh");
-
-      // ✅ Instantly update sidebar room (no API fetch)
-      onRoomUpdated?.({
-        ...room,
-        lastMessage: newMsg.content,
-        lastMessageAt: newMsg.createdAt,
-        lastMessageSenderId: newMsg.senderId,
-        deliveredTo: newMsg.deliveredTo || [],
-        seenBy: newMsg.seenBy || [],
-      });
     } catch (err) {
       console.error("Send message failed:", err);
     } finally {
       setSending(false);
       scrollToBottom();
+      requestAnimationFrame(() => input.focus());
     }
   }
 
-  // ✅ Tick status
-  function getTickStatus(msg) {
+  const getTickStatus = (msg) => {
     const isMine = msg.senderId === user?._id || msg.senderId === user?.id;
     if (!isMine) return null;
     if (msg.seenBy?.length > 0)
@@ -81,63 +94,37 @@ export default function ChatPane({ room, onRoomUpdated }) {
     if (msg.deliveredTo?.length > 0)
       return <CheckCheck size={14} className="text-gray-400 inline" />;
     return <Check size={14} className="text-gray-400 inline" />;
-  }
+  };
 
-  // ✅ Render each message
-  const renderMessage = (msg, index) => {
+  const renderMessage = (msg) => {
     const mine = msg.senderId === user?.id || msg.senderId === user?._id;
-    const isGroup = room?.isGroup;
-    const showAvatar =
-      isGroup &&
-      !mine &&
-      (index === messages.length - 1 ||
-        messages[index + 1]?.senderId !== msg.senderId);
-
     return (
       <div
         key={msg._id}
         className={`flex ${
           mine ? "justify-end" : "justify-start"
-        } mb-2 items-end`}
+        } mb-1 items-end`}
       >
-        {!mine && showAvatar && (
-          <Avatar
-            user={room.members?.find((m) => m._id === msg.senderId)}
-            size={28}
-            className="mr-2"
-          />
-        )}
-
         <div
-          className={`max-w-xs md:max-w-md px-3 py-2 rounded-2xl text-sm shadow-sm relative ${
+          className={`inline-flex flex-col items-end rounded-2xl text-sm max-w-xs md:max-w-md leading-snug px-3 py-2 ${
             mine
               ? "bg-blue-600 text-white rounded-br-none"
               : "bg-gray-200 text-gray-800 rounded-bl-none"
           }`}
         >
+          <div className="break-words whitespace-pre-wrap w-full">
+            {msg.content}
+          </div>
           <div
-            className={`relative inline-flex flex-col rounded-2xl text-sm max-w-xs md:max-w-md leading-snug ${
-              mine
-                ? "bg-blue-600 text-white rounded-br-none self-end"
-                : "bg-gray-200 text-gray-800 rounded-bl-none self-start"
+            className={`flex items-center gap-1 text-[10px] mt-[2px] ${
+              mine ? "text-gray-200" : "text-gray-500"
             }`}
           >
-            <div className="flex items-end gap-1">
-              <span className="break-words whitespace-pre-wrap block">
-                {msg.content}
-              </span>
-              <span
-                className={`flex items-center gap-1 text-[10px] shrink-0 ml-2 ${
-                  mine ? "text-gray-200" : "text-gray-500"
-                }`}
-              >
-                {new Date(msg.createdAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-                {mine && getTickStatus(msg)}
-              </span>
-            </div>
+            {new Date(msg.createdAt).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+            {mine && getTickStatus(msg)}
           </div>
         </div>
       </div>
@@ -145,24 +132,33 @@ export default function ChatPane({ room, onRoomUpdated }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-white shadow-sm sticky top-0 z-10">
+    <div className="flex flex-col h-[100dvh] bg-gray-50 overflow-hidden">
+      {/* 🔹 Sticky Header */}
+      <div className="sticky top-0 bg-white border-b shadow-sm z-50 h-14 flex items-center px-4 gap-3 flex-shrink-0">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="mr-2 p-1 rounded-md text-gray-600 hover:bg-gray-100 sm:hidden"
+            aria-label="Back"
+          >
+            <ArrowLeft size={22} />
+          </button>
+        )}
         <Avatar
           user={
             room.isGroup
               ? { firstname: room.name?.[0], lastname: "" }
               : room.members?.find((m) => m._id !== user?._id)
           }
-          size={40}
+          size={38}
         />
-        <div className="flex flex-col">
-          <h2 className="text-lg font-semibold text-gray-800">
+        <div className="flex flex-col truncate leading-tight">
+          <h2 className="text-[15px] font-semibold text-gray-800 truncate max-w-[200px] sm:max-w-none">
             {room?.name ||
               room.members?.find((m) => m._id !== user?._id)?.firstname ||
               "Chat"}
           </h2>
-          <p className="text-xs text-gray-500">
+          <p className="text-[11px] text-gray-500 truncate">
             {room?.isGroup
               ? `${room.members?.length || 0} members`
               : "Direct chat"}
@@ -170,8 +166,15 @@ export default function ChatPane({ room, onRoomUpdated }) {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      {/* 🔹 Scrollable Messages Area */}
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-3 pt-3 pb-2 scroll-smooth min-h-0"
+        style={{
+          WebkitOverflowScrolling: "touch",
+          transform: "translateZ(0)", // Hardware acceleration for smoother scrolling
+        }}
+      >
         {loading ? (
           <div className="text-center text-gray-400 mt-10">
             Loading messages...
@@ -181,29 +184,45 @@ export default function ChatPane({ room, onRoomUpdated }) {
             No messages yet. Say hi 👋
           </div>
         ) : (
-          messages.map((msg, i) => renderMessage(msg, i))
+          <div className="min-h-full">
+            {messages.map((msg) => renderMessage(msg))}
+          </div>
         )}
-        <div ref={messagesEndRef}></div>
+        <div ref={messagesEndRef} className="h-px" />
       </div>
 
-      {/* Input */}
-      <div className="flex items-center gap-2 px-4 py-3 border-t bg-white">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={messageText}
-          onChange={(e) => setMessageText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          disabled={sending}
-          className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sending || !messageText.trim()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-full text-sm hover:bg-blue-700 transition"
-        >
-          {sending ? "..." : "Send"}
-        </button>
+      {/* 🔹 Sticky Footer */}
+      <div className="sticky bottom-0 bg-white border-t z-40 p-2 sm:p-3 flex-shrink-0">
+        <div className="max-w-5xl mx-auto flex items-center gap-2 px-2 sm:px-3">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Type a message..."
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={(e) => e.key === "Enter" && !sending && handleSend(e)}
+            className="flex-1 bg-gray-100 border border-gray-200 rounded-full px-4 py-[7px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            autoFocus
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
+          />
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              handleSend(e);
+            }}
+            onClick={(e) => handleSend(e)}
+            disabled={sending || !inputRef.current?.value.trim()}
+            className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition flex items-center justify-center active:scale-95 select-none disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Send"
+          >
+            <Send size={18} />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -21,13 +21,22 @@ export default function ChatLayout() {
   const [hasMore, setHasMore] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const isFetchingRef = useRef(false);
+  const [isMobileView, setIsMobileView] = useState(false);
 
-  // 🧠 Show temporary toast message
+  // 📱 Detect mobile width
+  useEffect(() => {
+    const handleResize = () => setIsMobileView(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // 🔔 Toast helper
   function showToast(type, message) {
     setToast({ type, message });
   }
 
-  // 🧩 Load user
+  // 👤 Load user
   useEffect(() => {
     const cached = localStorage.getItem("user");
     if (cached) setUser(JSON.parse(cached));
@@ -44,24 +53,21 @@ export default function ChatLayout() {
     }
   }
 
-  // 🧩 Handle tab switching
+  // 🔄 Handle tab switching
   useEffect(() => {
-    // reset fetch guards and pagination on tab switch
     isFetchingRef.current = false;
     setHasMore(true);
     setPage(1);
 
     const cached = getCachedRooms(roomType);
     if (cached.length > 0) {
-      // use cache immediately
       setRooms(cached);
     } else {
-      // fetch fresh for this tab
       fetchRooms(1, true);
     }
   }, [roomType]);
 
-  // 🧩 Helper: get cached rooms for tab
+  // 🧩 Get cached rooms by tab
   const getCachedRooms = (type) => {
     if (type === "direct") return cachedRooms.direct || [];
     if (type === "group") return cachedRooms.group || [];
@@ -76,18 +82,15 @@ export default function ChatLayout() {
 
     try {
       let endpoint = `/api/room?page=${currentPage}&limit=20`;
-
       if (roomType === "direct") endpoint += "&type=direct";
       else if (roomType === "group") endpoint += "&type=group";
 
       const res = await api.get(endpoint);
-      let newRooms = res.data?.data || [];
+      const newRooms = res.data?.data || [];
       const totalPages = res.data?.meta?.totalPages || 1;
 
-      // update rooms
       setRooms((prev) => (reset ? newRooms : [...prev, ...newRooms]));
 
-      // update cache for this tab
       const cacheKey = roomType || "all";
       setCachedRooms((prev) => ({
         ...prev,
@@ -105,43 +108,32 @@ export default function ChatLayout() {
     }
   }
 
-  // 🧩 Infinite Scroll
+  // 📜 Infinite scroll
   const handleScroll = (e) => {
     const nearBottom =
       e.target.scrollHeight - e.target.scrollTop <= e.target.clientHeight + 100;
 
     if (nearBottom && hasMore && !isFetchingRef.current) {
-      const nextPage = page + 1;
-      fetchRooms(nextPage);
+      fetchRooms(page + 1);
     }
   };
 
-  // 🧩 When a new room is created
+  // ➕ Room created
   function handleRoomCreated(room) {
-    const typeKey = room.isGroup ? "group" : "direct";
-
-    // clear cache for safety
-    setCachedRooms({
-      all: [],
-      direct: [],
-      group: [],
-    });
-
-    // refresh rooms for the current tab
+    setCachedRooms({ all: [], direct: [], group: [] });
     setRooms((prev) => [room, ...prev]);
     setShowDrawer(false);
     showToast("success", "Room created!");
     fetchRooms(1, true);
   }
 
+  // 🧠 Room updated (e.g., new message)
   function handleRoomUpdated(update) {
-    // if called with "refresh" → force backend refetch
     if (update === "refresh") {
       refreshRoomsAfterMessage();
       return;
     }
 
-    // otherwise just merge the update (used for local instant updates)
     const updateCache = (list) =>
       list.map((r) => (r._id === update._id ? { ...r, ...update } : r));
 
@@ -153,7 +145,7 @@ export default function ChatLayout() {
     }));
   }
 
-  // 🧹 Clears cache for current tab and refetches rooms fresh
+  // ♻️ Refresh rooms from server (after message)
   let refreshTimer;
   function refreshRoomsAfterMessage() {
     clearTimeout(refreshTimer);
@@ -165,7 +157,8 @@ export default function ChatLayout() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100 relative">
+    <div className="flex h-screen bg-[#f0f2f5] relative overflow-hidden">
+      {/* Toast */}
       {toast && (
         <Toast
           type={toast.type}
@@ -174,23 +167,56 @@ export default function ChatLayout() {
         />
       )}
 
-      {/* Sidebar */}
-      <Sidebar
-        rooms={rooms}
-        user={user}
-        activeRoom={activeRoom}
-        setActiveRoom={setActiveRoom}
-        onAdd={() => setShowDrawer(true)}
-        roomType={roomType}
-        setRoomType={setRoomType}
-        onScroll={handleScroll}
-        isFetching={isFetching}
-      />
+      {/* 🟩 Sidebar */}
+      <div
+        className={`${
+          isMobileView
+            ? activeRoom
+              ? "hidden"
+              : "w-full"
+            : "w-80 border-r border-gray-200"
+        } flex-shrink-0 bg-white relative overflow-y-auto transition-all duration-300`}
+      >
+        <Sidebar
+          rooms={rooms}
+          user={user}
+          activeRoom={activeRoom}
+          setActiveRoom={setActiveRoom}
+          onAdd={() => setShowDrawer(true)}
+          roomType={roomType}
+          setRoomType={setRoomType}
+          onScroll={handleScroll}
+          isFetching={isFetching}
+        />
 
-      {/* Chat Panel */}
-      <div className="flex-1">
+        {/* ✅ Floating Add Button (Only in Sidebar view) */}
+        {(!activeRoom || !isMobileView) && (
+          <button
+            onClick={() => setShowDrawer(true)}
+            className={`${
+              isMobileView
+                ? "fixed bottom-6 right-6"
+                : "absolute bottom-6 right-6 sm:right-8"
+            } bg-green-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-3xl hover:bg-green-700 transition-all z-50`}
+            title="New Chat"
+          >
+            +
+          </button>
+        )}
+      </div>
+
+      {/* 💬 Chat Panel */}
+      <div
+        className={`flex-1 flex flex-col bg-gray-50 transition-all duration-300 ${
+          isMobileView && !activeRoom ? "hidden" : "flex"
+        }`}
+      >
         {activeRoom ? (
-          <ChatPane room={activeRoom} onRoomUpdated={handleRoomUpdated} />
+          <ChatPane
+            room={activeRoom}
+            onRoomUpdated={handleRoomUpdated}
+            onBack={isMobileView ? () => setActiveRoom(null) : undefined}
+          />
         ) : isFetching ? (
           <div className="h-full flex items-center justify-center text-gray-400 text-sm">
             Loading chats...
@@ -208,7 +234,7 @@ export default function ChatLayout() {
         )}
       </div>
 
-      {/* Drawer */}
+      {/* 🧰 Drawer */}
       {showDrawer && (
         <RoomDrawer
           onClose={() => setShowDrawer(false)}

@@ -15,7 +15,6 @@ export default function Sidebar({
   user,
   activeRoom,
   setActiveRoom,
-  onAdd,
   roomType,
   setRoomType,
   onScroll,
@@ -43,7 +42,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-80 bg-gradient-to-b from-white to-gray-50 border-r border-gray-200 flex flex-col shadow-sm">
+    <aside className="flex flex-col bg-white border-r border-gray-200 h-full w-full sm:w-80 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
         <div className="flex items-center gap-2">
@@ -63,14 +62,6 @@ export default function Sidebar({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={onAdd}
-            className="bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-blue-700 transition"
-            title="New Chat"
-          >
-            +
-          </button>
-
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
@@ -134,69 +125,81 @@ export default function Sidebar({
       </div>
 
       {/* Room List */}
-      <div className="flex-1 overflow-y-auto bg-[#fafafa]" onScroll={onScroll}>
+      <div
+        className="flex-1 overflow-y-auto bg-[#f8f9fa] divide-y divide-gray-100"
+        onScroll={onScroll}
+      >
         {rooms.length === 0 ? (
-          <div className="text-center text-gray-400 mt-10">No rooms found</div>
+          <div className="text-center text-gray-400 mt-10">No chats found</div>
         ) : (
           rooms.map((room) => {
-            console.log("Logged in user:", user);
-
-            const members = room.members || [];
-            const otherMembers = members.filter(
-              (m) => m._id !== user?._id && m.id !== user?.id
-            );
-            const displayUser = !room.isGroup ? otherMembers[0] || user : null;
+            const isActive = activeRoom?._id === room._id;
+            const otherMember =
+              !room.isGroup && room.members?.find((m) => m._id !== user?._id);
 
             return (
               <div
                 key={room._id}
                 onClick={() => setActiveRoom(room)}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-blue-50 transition ${
-                  activeRoom?._id === room._id
-                    ? "bg-blue-100 font-semibold"
-                    : "text-gray-700"
+                className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors duration-150 ${
+                  isActive
+                    ? "bg-blue-50 border-l-4 border-blue-600"
+                    : "hover:bg-gray-100"
                 }`}
               >
-                <Avatar
-                  user={
-                    room.isGroup
-                      ? { firstname: room.name?.[0], lastname: "" }
-                      : room.members?.find((m) => m._id !== user?._id)
-                  }
-                  size={42}
-                />
+                {/* Avatar */}
+                <div className="flex-shrink-0">
+                  <Avatar
+                    user={
+                      room.isGroup
+                        ? { firstname: room.name?.[0], lastname: "" }
+                        : otherMember
+                    }
+                    size={46}
+                  />
+                </div>
 
-                <div className="flex-1 min-w-0">
-                  {/* Room Name */}
+                {/* Chat Info */}
+                <div className="flex-1 min-w-0 border-b border-gray-100 pb-2">
                   <div className="flex justify-between items-center">
-                    <div className="font-medium text-gray-900 truncate">
+                    <h3
+                      className={`font-medium text-sm truncate ${
+                        isActive ? "text-blue-700" : "text-gray-900"
+                      }`}
+                    >
                       {room.name}
-                    </div>
-
-                    {/* Time (lastMessageAt) */}
+                    </h3>
                     {room.lastMessageAt && (
-                      <div className="text-xs text-gray-400 whitespace-nowrap ml-2">
+                      <span className="text-[11px] text-gray-500 ml-2 whitespace-nowrap">
                         {formatRelativeTime(room.lastMessageAt)}
-                      </div>
+                      </span>
                     )}
                   </div>
 
-                  {/* Last message or fallback */}
                   <div className="text-xs text-gray-500 truncate flex items-center gap-1">
-                    {room.lastMessage &&
-                      room.lastMessageSenderId?.toString() ===
-                        user?.id?.toString() && (
-                        <>
-                          {room.seenBy?.length > 0 ? (
-                            <CheckCheck size={14} className="text-blue-500" />
-                          ) : room.deliveredTo?.length > 0 ? (
-                            <CheckCheck size={14} className="text-gray-500" />
-                          ) : (
-                            <Check size={14} className="text-gray-500" />
-                          )}
-                        </>
-                      )}
-                    <span className="truncate">{room.lastMessage}</span>
+                    {room.lastMessageSenderId === user?._id && (
+                      <>
+                        {room.seenBy?.length > 0 ? (
+                          <CheckCheck
+                            size={12}
+                            className="text-blue-500 flex-shrink-0"
+                          />
+                        ) : room.deliveredTo?.length > 0 ? (
+                          <CheckCheck
+                            size={12}
+                            className="text-gray-500 flex-shrink-0"
+                          />
+                        ) : (
+                          <Check
+                            size={12}
+                            className="text-gray-400 flex-shrink-0"
+                          />
+                        )}
+                      </>
+                    )}
+                    <span className="truncate">
+                      {room.lastMessage || "No messages yet"}
+                    </span>
                   </div>
                 </div>
               </div>

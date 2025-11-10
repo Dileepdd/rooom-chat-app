@@ -64,3 +64,35 @@ body,
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
 }
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease forwards;
+}
+:root {
+  --chat-header-height: 64px;
+  --chat-footer-height: 64px;
+}
