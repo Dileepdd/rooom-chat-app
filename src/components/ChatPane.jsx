@@ -115,17 +115,29 @@ export default function ChatPane({ room, onRoomUpdated }) {
               : "bg-gray-200 text-gray-800 rounded-bl-none"
           }`}
         >
-          <span className="break-words block">{msg.content}</span>
           <div
-            className={`flex items-center justify-end gap-1 mt-0.5 text-[10px] ${
-              mine ? "text-gray-200" : "text-gray-500"
+            className={`relative inline-flex flex-col rounded-2xl text-sm max-w-xs md:max-w-md leading-snug ${
+              mine
+                ? "bg-blue-600 text-white rounded-br-none self-end"
+                : "bg-gray-200 text-gray-800 rounded-bl-none self-start"
             }`}
           >
-            {new Date(msg.createdAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-            {mine && getTickStatus(msg)}
+            <div className="flex items-end gap-1">
+              <span className="break-words whitespace-pre-wrap block">
+                {msg.content}
+              </span>
+              <span
+                className={`flex items-center gap-1 text-[10px] shrink-0 ml-2 ${
+                  mine ? "text-gray-200" : "text-gray-500"
+                }`}
+              >
+                {new Date(msg.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+                {mine && getTickStatus(msg)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
